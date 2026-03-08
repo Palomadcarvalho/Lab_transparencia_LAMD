@@ -42,12 +42,18 @@ def inicializar_saldo(valor: int = 1000):
 def transferir_com_lock(valor: int, nome: str):
     """Transferencia COM lock distribuido — segura entre processos distintos."""
     r = get_redis()
-    with distributed_lock(r, "conta:saldo"):
-        saldo_atual = int(r.get("conta:saldo"))
-        time.sleep(0.05)                       # mesmo delay — agora serializado pelo lock
-        novo_saldo = saldo_atual - valor
-        r.set("conta:saldo", novo_saldo)
-        print(f"  [{nome}] transferiu R${valor}. Saldo atual: R${novo_saldo}")
+
+    while True:
+        try:
+            with distributed_lock(r, "conta:saldo"):
+                saldo_atual = int(r.get("conta:saldo"))
+                time.sleep(0.05)
+                novo_saldo = saldo_atual - valor
+                r.set("conta:saldo", novo_saldo)
+                print(f"  [{nome}] transferiu R${valor}. Saldo atual: R${novo_saldo}")
+                break
+        except RuntimeError:
+            time.sleep(0.02)  # espera um pouco e tenta de novo
 
 if __name__ == "__main__":
     inicializar_saldo(1000)
